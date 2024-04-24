@@ -65,14 +65,14 @@ client = MyClient(intents=intents)
 
 @client.event
 async def on_ready():
-    print(f'Logged in as {client.user} (ID: {client.user.id})')
-    print('------')
+    print(f"Logged in as {client.user} (ID: {client.user.id})")
+    print("-------------------------------")
 
 
-@client.tree.command(name="hello_print", description="Replies with hello!")
-async def hello(interaction: discord.Interaction):
+@client.tree.command(name="test_bot_is_running", description="Replies with hello!")
+async def running_test(interaction: discord.Interaction):
     # noinspection PyUnresolvedReferences
-    await interaction.response.send_message(f'Hello, {interaction.user.mention}')
+    await interaction.response.send_message(f"Hello, {interaction.user.mention}", ephemeral=True)
 
 
 @client.tree.command(name="shutdown", description="Shuts down the bot")
@@ -88,35 +88,60 @@ async def shutdown_bot(interaction: discord.Interaction):
 
 
 @client.tree.command(name="send_message", description="Sends the text into the current channel.")
-@app_commands.rename(text_to_send='text')
-@app_commands.describe(text_to_send='Text to send in the current channel')
+@app_commands.rename(text_to_send="text")
+@app_commands.describe(text_to_send="Text to send in the current channel")
 async def send(interaction: discord.Interaction, text_to_send: str):
+    if "@everyone" in text_to_send:
+        # noinspection PyUnresolvedReferences
+        await interaction.response.send_message("Nice try 😉", ephemeral=True)
+    elif "@here" in text_to_send:
+        # noinspection PyUnresolvedReferences
+        await interaction.response.send_message("Nice try 😉", ephemeral=True)
+    else:
+        # noinspection PyUnresolvedReferences
+        await interaction.response.send_message(text_to_send)
+
+
+@client.tree.command(name="delete_messages", description="Deletes defined number of messages from the current channel.")
+@app_commands.rename(to_delete="how_many_messages")
+@app_commands.describe(to_delete="Number of messages to delete")
+async def send(interaction: discord.Interaction, to_delete: int):
     # noinspection PyUnresolvedReferences
-    await interaction.response.send_message(text_to_send)
+    await interaction.response.defer(ephemeral=True)
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.followup.send("Invalid permissions")
+        return
+    if to_delete <= 0:
+        await interaction.followup.send("Invalid number")
+        return
+    else:
+        # noinspection PyUnresolvedReferences
+        await interaction.followup.send("Deleting...")
+        await interaction.channel.purge(limit=to_delete)
+        await interaction.edit_original_response(content=f"Deleted {to_delete} messages.")
 
 
 @client.tree.command(name="add_numbers", description="Adds two numbers together")
-@app_commands.describe(first_value='The first value you want to add something to',
-                       second_value='The value you want to add to the first value')
+@app_commands.describe(first_value="The first value you want to add something to",
+                       second_value="The value you want to add to the first value")
 async def add(interaction: discord.Interaction, first_value: int, second_value: int):
     try:
         # noinspection PyUnresolvedReferences
-        await interaction.response.defer()  # Defer the response
-        # Perform any necessary calculations or processing here
+        await interaction.response.defer(ephemeral=True, thinking=False)
         # noinspection PyUnresolvedReferences
-        await interaction.followup.send(f'{first_value} + {second_value} = {first_value + second_value}')
+        await interaction.followup.send(f"{first_value} + {second_value} = {first_value + second_value}")
     except Exception as e:
-        await asyncio.sleep(1)
+        await asyncio.sleep(2)
+        # noinspection PyUnresolvedReferences
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send("An error occurred while processing the command.", ephemeral=True)
+        await interaction.followup.send("An error occurred while processing the command.")
 
 
 @client.tree.command(name="ping", description="Get bot latency")
 async def ping(interaction: discord.Interaction):
     try:
-        # Defer the response
         # noinspection PyUnresolvedReferences
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True)  # Defer the response
 
         # Get the bot's latency
         latency = round(client.latency * 1000)
