@@ -9,16 +9,20 @@ pip install -r requirements.txt
 # How to input your bot token and UID
 
 1. Create an ``.env`` file in the bot's root folder.
-2. Format the ``.env`` file as follows, replacing ``TOKEN_HERE`` and ``OWNER_UID_HERE`` with your bot's token and your Discord UID respectively. Keep the double quotation marks.
+2. Format the ``.env`` file as follows, replacing ``TOKEN_HERE``, ``OWNER_UID_HERE`` and ``VIRUS_TOTAL_API_KEY_HERE`` with your bot's token, your Discord UID and VirusTotal API key respectively. Keep the double quotation marks.
 ```text
 BOT_TOKEN = "TOKEN_HERE"
 OWNER_ID = "OWNER_UID_HERE"
+VT_ID = "VIRUS_TOTAL_API_KEY_HERE"
 ```
 For example:
 ```text
-BOT_TOKEN = "123456789"
+BOT_TOKEN = "12ab56c89"
 OWNER_ID = "123456789"
+VT_ID = "12ab56c89"
 ```
+Owner_ID must be a numeric value
+
 3. The ``.gitignore`` file will ignore the ``.env``.<br>
 
 ### Note:
