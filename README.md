@@ -33,5 +33,12 @@ with open('path/to/.env', 'r') as file:
     content = file.read().strip()
 ```
 
+# How to run
+
+Open a command line in the same folder as the main.py script (Make sure python is installed and/or your python venv is active) and type:
+```bash
+python main.py
+```
+
 # Getting your Discord UID
 If you don't know how to get your Discord UID, [click here](https://support.playhive.com/discord-user-id/).
