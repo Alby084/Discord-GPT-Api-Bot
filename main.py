@@ -21,7 +21,7 @@ with open('.env', 'r') as file:
                 token = line.split('"')[1]
             elif line.startswith('OWNER_ID = "') and line.endswith('"'):
                 owner_uid = line.split('"')[1]
-            elif line.startswith('VT_ID = "') and line.endswith('"'):
+            elif line.startswith('GPT_API_KEY = "') and line.endswith('"'):
                 vt_id = line.split('"')[1]
 
         if token and owner_uid:
