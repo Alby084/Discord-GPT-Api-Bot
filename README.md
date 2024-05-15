@@ -6,7 +6,7 @@ This project requires discord.py version 2.3.2 and OpenAI version 1.30.1 which c
 pip install -r requirements.txt
 ```
 
-#### Manually install requirements:
+### Manually install requirements:
 
 ```bash
 pip install discord.py~=2.3.2
