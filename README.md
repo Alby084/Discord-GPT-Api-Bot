@@ -18,7 +18,7 @@ pip install openai~=1.30.1
 
 # How to input your bot token and UID
 
-1. Create an ``.env`` file in the bot's root folder.
+1. Create an ``.env`` file in the bot's root folder. (Same folder as main.py)
 2. Format the ``.env`` file as follows, replacing ``TOKEN_HERE``, ``OWNER_UID_HERE`` and ``CHAT_GPT_API_KEY_HERE`` with your bot's token, your Discord UID and ChatGPT API key respectively. Keep the double quotation marks.
 ```text
 BOT_TOKEN = "TOKEN_HERE"
@@ -51,4 +51,8 @@ python main.py
 ```
 
 # Getting your Discord UID
-If you don't know how to get your Discord UID, [click here](https://support.playhive.com/discord-user-id/).
+1. On Discord, go to Settings > Advanced
+2. Scroll down and make sure that Developer Mode is **on**
+3. Exit settings and left click on your profile picture at the bottom left of discord (same place as the settings button) and click "Copy User ID" as shown below:
+
+<img src="https://cdn.discordapp.com/attachments/843759472613654550/1240133218536128532/image.png?ex=6645738f&is=6644220f&hm=9ae9446f1793025791cad87a0aad650131a1b8f932b096da4e33f98908dc1f3e&" alt="drawing" width="380"/>
