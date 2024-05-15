@@ -1,9 +1,19 @@
 # Requirements
 
-This project requires discord.py version 2.3.2 which can be installed via `requirements.txt`:
+This project requires discord.py version 2.3.2 and OpenAI version 1.30.1 which can be installed via `requirements.txt`:
 
 ```bash
 pip install -r requirements.txt
+```
+
+#### Manually install requirements:
+
+```bash
+pip install discord.py~=2.3.2
+```
+
+```bash
+pip install openai~=1.30.1
 ```
 
 # How to input your bot token and UID
