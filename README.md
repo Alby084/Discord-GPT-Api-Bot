@@ -55,4 +55,4 @@ python main.py
 2. Scroll down and make sure that Developer Mode is **on**
 3. Exit settings and left click on your profile picture at the bottom left of discord (same place as the settings button) and click "Copy User ID" as shown below:
 
-<img src="https://cdn.discordapp.com/attachments/843759472613654550/1240133218536128532/image.png?ex=6645738f&is=6644220f&hm=9ae9446f1793025791cad87a0aad650131a1b8f932b096da4e33f98908dc1f3e&" alt="drawing" width="380"/>
+<img src="https://github.com/Alby084/Discord-GPT-Api-Bot/assets/99786431/a6de8ccb-206b-4656-abe2-35bb36751f7f" alt="drawing" width="380"/>
