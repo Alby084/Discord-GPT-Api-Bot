@@ -2,41 +2,21 @@ import asyncio
 import discord
 from discord import app_commands
 import sys
+import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 MY_GUILD = discord.Object(id=469406837608022027)  # replace with your guild id
 MY_GUILD_2 = discord.Object(id=1232564395964633150)  # replace with your guild id (this one is optional)
 
-with open('.env', 'r') as file:
-    content = file.read().strip()
-
-    if 'BOT_TOKEN = "' in content and 'OWNER_ID = "' in content:
-        lines = content.split('\n')
-        token = None
-        owner_uid = None
-
-        for line in lines:
-            line = line.strip()
-
-            if line.startswith('BOT_TOKEN = "') and line.endswith('"'):
-                token = line.split('"')[1]
-            elif line.startswith('OWNER_ID = "') and line.endswith('"'):
-                owner_uid = line.split('"')[1]
-            elif line.startswith('GPT_API_KEY = "') and line.endswith('"'):
-                vt_id = line.split('"')[1]
-
-        if token and owner_uid:
-            if owner_uid.isdigit():
-                owner_uid = int(owner_uid)
-            else:
-                print("Invalid owner ID format in '.env'. It should be a numeric value.")
-                sys.exit(1)
-        else:
-            print("Missing or invalid BOT_TOKEN/OWNER_ID in '.env'. Refer to README.md for correct format.")
-            sys.exit(1)
-    else:
-        print("Invalid format in '.env'. Refer to README.md for correct format.")
-        sys.exit(1)
-
+try:
+    token = os.getenv("BOT_TOKEN") # returns a str
+    owner_uid = int(os.getenv("OWNER_ID")) # returns an int
+    gpt_key = os.getenv("GPT_API_KEY") # returns a str
+except(TypeError, ValueError):
+    sys.exit("Error: One or more environment variables are not set or contain invalid values.")
+    
 
 class MyClient(discord.Client):
     def __init__(self, *, intents: discord.Intents):
@@ -61,9 +41,14 @@ class MyClient(discord.Client):
         await self.tree.sync(guild=MY_GUILD_2)
 
     async def on_message(self, message):
-        print(f'Message from {message.author}({message.author.id}) in {message.guild}({message.channel.name}): {message.content}')
-        if message.author.id == self.user.id:
+        try:
+            print(f'Message from {message.author}({message.author.id}) in {message.guild}({message.channel.name}): {message.content}')
+            if message.author.id == self.user.id:
+                return
+        except AttributeError:
+            print("Unable to print logged user message 'DMChannel' error (Cant log sent commands)") # This isnt needed. you can remove this print() statement if you want. I like it for debug purposes
             return
+            
 
 
 intents = discord.Intents.default()
