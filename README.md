@@ -67,7 +67,19 @@ Open a new command line in the same folder as the main.py script (Make sure pyth
 python main.py
 ```
 
-# Getting ID's and tokens
+# Creating a discord bot application and getting bot token
+1. Visit to the discord developer portal applications page [Here](https://discord.com/developers/applications).
+2. Click the ``New Application`` button at the top right of the page next to your discord profile picture.
+3. Name your application and click create. This will be used as the default username for your bot.
+4. Navigate to the ``Bot`` page on the left navigation pannel as shown below:
+5. Change your bot's username under ``USERNAME`` if desired.
+6. Click the ``Reset Token`` button and copy your bots token for use in the ``.env`` file. You will have to reset the bot token to view and copy it again.
+7. Navigate to the ``OAuth2`` page on the left navigation pannel as shown below:
+8. Select ``bot`` under ``OAuth2 URL Generator`` ``SCOPES`` and select ``Administrator`` under ``BOT PERMISSIONS`` ``GENERAL PERMISSIONS``.
+9. Copy the generated discord link at the bottom of the page and paste this link into your web browsers address bar.
+10. Follow the prompts to add your bot to any discord server where you have the ``Manage Server`` or ``Administrator`` permission.
+
+# Getting ID's and GPT API key
 
 ### Getting your discord UID
 1. On Discord, go to Settings > Advanced
