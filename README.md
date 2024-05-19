@@ -67,17 +67,30 @@ Open a new command line in the same folder as the main.py script (Make sure pyth
 python main.py
 ```
 
-# Getting your discord UID
+# Getting ID's and tokens
+
+### Getting your discord UID
 1. On Discord, go to Settings > Advanced
 2. Scroll down and make sure that Developer Mode is **on**
 3. Exit settings and left click on your profile picture at the bottom left of discord (same place as the settings button) and click ``Copy User ID`` as shown below:
 
 <img src="https://github.com/Alby084/Discord-GPT-Api-Bot/assets/99786431/a6de8ccb-206b-4656-abe2-35bb36751f7f" alt="drawing" width="380"/> <br>
 
-# Getting discord server ID
+### Getting discord server ID
 1. On Discord, go to Settings > Advanced
 2. Scroll down and make sure that Developer Mode is **on**
 3. Exit settings and right click on the server(s) your bot is in
 and click ``Copy Server ID`` as shown below:
 
 <img src="https://github.com/Alby084/python-beginner-projects/assets/99786431/cd4e8349-b916-4f51-adc4-fd774465483f" alt="drawing" width="220"/> <br>
+
+### Getting chat GPT API key
+1. Visit the openai playground website settings page [Here](https://platform.openai.com/settings/organization/general).
+2. Click the ``Create Project`` button at the bottom of the settings list as shown below:
+3. Name your project and click the ``Create`` button.
+4. Navigate to the ``API keys`` page above the settings page on the left side navigation pannel. Alternatively you can click [Here](https://platform.openai.com/api-keys).
+5. Click the ``Create new secret key`` button.
+6. Choose ``You`` under ``Owned by``. Name your API key something descriptive and select the new project you just created in the ``Project`` dropdown. Set ``Permissions`` as ``All`` and click the ``Create secret key`` button as shown below:
+
+### Note on GPT ``Credit balance``:
+Ensure you have an available ``Credit balance``. You can check on the ``Billing`` page in ``Settings`` or by clicking [Here](https://platform.openai.com/settings/organization/billing/overview). If you do not have a ``Credit balance`` you will need to add money (credit) to your account otherwise this discord bot's chat GPT functionality will not work.
