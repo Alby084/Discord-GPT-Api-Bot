@@ -4,6 +4,7 @@ import sys
 import os
 from dotenv import load_dotenv
 from Chat_GPT_Function import *
+import asyncio
 
 load_dotenv(override=True)
 
@@ -88,7 +89,21 @@ async def send(interaction: discord.Interaction, to_delete: int):
         await interaction.followup.send("Deleting...")
         await interaction.channel.purge(limit=to_delete)
         await interaction.edit_original_response(content=f"Deleted {to_delete} messages.")
-
+        
+@client.tree.command(name="add_numbers", description="Adds two numbers together")
+@app_commands.describe(first_value="The first value you want to add something to",
+                       second_value="The value you want to add to the first value")
+async def add(interaction: discord.Interaction, first_value: int, second_value: int):
+    try:
+        # noinspection PyUnresolvedReferences
+        await interaction.response.defer(ephemeral=True, thinking=False)
+        # noinspection PyUnresolvedReferences
+        await interaction.followup.send(f"{first_value} + {second_value} = {first_value + second_value}")
+    except Exception as e:
+        await asyncio.sleep(2)
+        # noinspection PyUnresolvedReferences
+        print(f"An error occurred: {str(e)}")
+        await interaction.followup.send("An error occurred while processing the command.")
 
 @client.tree.command(name="ping", description="Get bot latency")
 async def ping(interaction: discord.Interaction):
