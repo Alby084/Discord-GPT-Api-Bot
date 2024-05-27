@@ -532,7 +532,7 @@ async def send(interaction: discord.Interaction, prompt: str, img_dimensions: st
         image_url = await loop.run_in_executor(None, dalle3, prompt, img_quality, img_dimensions, img_style)  # Prevents heartbeat block warning and bot disconnecting from discord error
 
         # Send as followup message
-        await interaction.followup.send(f"{image_url} IMAGE LINK EXPIRES IN <t:{int(time.mktime(future_time.timetuple()))}:R>")
+        await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -568,7 +568,7 @@ async def send(interaction: discord.Interaction, prompt: str, img_dimensions: st
         image_url = await loop.run_in_executor(None, dalle2, prompt, img_dimensions)  # Prevents heartbeat block warning and bot disconnecting from discord error
 
         # Send as followup message
-        await interaction.followup.send(f"{image_url} IMAGE LINK EXPIRES IN <t:{int(time.mktime(future_time.timetuple()))}:R>")  # Convert future_time to unix timestamp.
+        await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")  # Convert future_time to unix timestamp.
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
