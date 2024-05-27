@@ -224,9 +224,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 # -------------------------- WEBSITE ----------------------------------
@@ -264,10 +268,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
-
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 # -------------------------- TEXT TO EMOJI ----------------------------------
 @client.tree.command(name="gpt_text_to_emoji", description="Converts text to emojis")
@@ -309,9 +316,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 # -------------------------- TEXT TO BLOCK LETTERS ----------------------------------
@@ -348,9 +359,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 # -------------------------- CODE DEBUG ----------------------------------
@@ -385,9 +400,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 # -------------------------- SHORT STORY ----------------------------------
@@ -424,9 +443,13 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 # -------------------------- GENERAL QUESTION ----------------------------------
@@ -482,9 +505,13 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
         
 # -------------------------- DALLE 3 ----------------------------------
 @client.tree.command(name="dalle_3", description="Generates an image with DALL·E 3")
@@ -533,12 +560,17 @@ async def send(interaction: discord.Interaction, prompt: str, img_dimensions: st
 
         # Send as followup message
         await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")
+        
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
         
 # -------------------------- DALLE 2 ----------------------------------
 @client.tree.command(name="dalle_2", description="Generates an image with DALL·E 2")
@@ -569,12 +601,17 @@ async def send(interaction: discord.Interaction, prompt: str, img_dimensions: st
 
         # Send as followup message
         await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")  # Convert future_time to unix timestamp.
+        
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while processing the command."
-        )
+        
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
 
 
 client.run(token)
