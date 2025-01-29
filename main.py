@@ -3,7 +3,7 @@ from discord import app_commands
 import sys
 import os
 from dotenv import load_dotenv
-from Chat_GPT_Function import gpt, dalle3, dalle2
+from Chat_GPT_Function import gpt, dalle3, dalle2, deepseek
 import json
 from datetime import datetime, timedelta
 import time
@@ -456,7 +456,7 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 @client.tree.command(name="gpt_general_question", description="For all your questions")
 @app_commands.rename(text="prompt")
 @app_commands.describe(text="What do you want to ask chatGPT?")
-@app_commands.describe(gpt_model="Possible options = gpt-4 or gpt-3.5 (gpt-3.5-turbo-16k abbreviated)")
+@app_commands.describe(gpt_model="Possible options = gpt-4, gpt-3.5 (gpt-3.5-turbo-16k abbreviated), or deepseek")
 async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  # noqa: F811
     try:
         await interaction.response.defer(
@@ -471,9 +471,9 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
         else:
             gpt_prompt = text
             
-        if gpt_model.lower() not in ("gpt-4", "gpt-3.5"):
+        if gpt_model.lower() not in ("gpt-4", "gpt-3.5", "deepseek"):
             await interaction.followup.send(
-                "Invalid GPT model. Must be either gpt-4 or gpt-3.5."
+                "Invalid GPT model. Must be either gpt-4, gpt-3.5, or deepseek."
             )
             return
         else:

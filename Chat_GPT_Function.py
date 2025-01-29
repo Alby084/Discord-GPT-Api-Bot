@@ -1,12 +1,16 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+import deepseek
 
 load_dotenv(override=True)
 
 gpt_api_key = os.getenv("GPT_API_KEY")
+deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
 
 def gpt(model: str, prompt: str, sys_prompt: str, temp: float):
+    if model == "deepseek":
+        return deepseek(prompt, sys_prompt, temp)
     client = OpenAI(api_key= gpt_api_key)
     response = client.chat.completions.create(
         model = model,
@@ -25,6 +29,16 @@ def gpt(model: str, prompt: str, sys_prompt: str, temp: float):
         top_p=1
     )
     output = response.choices[0].message.content.strip()
+    return output
+
+def deepseek(prompt: str, sys_prompt: str, temp: float):
+    client = deepseek.Client(api_key=deepseek_api_key)
+    response = client.chat.create(
+        prompt=prompt,
+        system_prompt=sys_prompt,
+        temperature=temp
+    )
+    output = response['choices'][0]['message']['content'].strip()
     return output
 
 def dalle3(prompt: str, quality: str, size: str, style: str):
