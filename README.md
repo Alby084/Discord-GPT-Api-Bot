@@ -9,11 +9,11 @@ pip install -r requirements.txt
 ### Manually install requirements:
 
 ```bash
-pip install discord.py~=2.3.2
+pip install discord.py~=2.4.0
 ```
 
 ```bash
-pip install openai~=1.30.1
+pip install openai~=1.61.0
 ```
 
 ```bash
