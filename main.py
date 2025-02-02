@@ -192,35 +192,39 @@ async def ping(interaction: discord.Interaction):
 
 # -------------------------- CORRECT GRAMMAR ----------------------------------
 @client.tree.command(
-    name="gpt_correct_grammar", description="Corrects grammar of inputted text"
+    name = "gpt_correct_grammar", description = "Corrects grammar of inputted text"
 )
-@app_commands.rename(text="text_to_correct")
-@app_commands.describe(text="Text to grammar correct")
+@app_commands.rename(text = "text_to_correct")
+@app_commands.describe(text = "Text to grammar correct")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title="Correct Grammar",
-            description=gpt(
-                "gpt-3.5-turbo-16k",
-                text,
-                data["system_content"][0]["correct_grammar"] + char_limit,
-                0,
-            ),
-            color=0x002AFF,
+            title = "Correct Grammar",
+            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["correct_grammar"] + char_limit, 0),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-3.5-turbo-16k",
+            #     text,
+            #     data["system_content"][0]["correct_grammar"] + char_limit,
+            #     0,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -238,33 +242,37 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     name="gpt_single_page_website",
     description="Creates a single paged website with embedded Javascript and CSS",
 )
-@app_commands.rename(text="website_prompt")
-@app_commands.describe(text="Website page specifications")
+@app_commands.rename(text = "website_prompt")
+@app_commands.describe(text = "Website page specifications")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title="Single Page Website",
-            description=gpt(
-                "gpt-3.5-turbo-16k",
-                text,
-                data["system_content"][0]["single_page_website"] + char_limit,
-                0.7,
-            ),
-            color=0x002AFF,
+            title = "Single Page Website",
+            description= await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["single_page_website"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-3.5-turbo-16k",
+            #     text,
+            #     data["system_content"][0]["single_page_website"] + char_limit,
+            #     0.7,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -277,13 +285,14 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
             await interaction.followup.send("An error occurred while processing the command.")
 
 # -------------------------- TEXT TO EMOJI ----------------------------------
-@client.tree.command(name="gpt_text_to_emoji", description="Converts text to emojis")
-@app_commands.rename(text="text")
-@app_commands.describe(text="Text to convert to emojis")
+@client.tree.command(name = "gpt_text_to_emoji", description = "Converts text to emojis")
+@app_commands.rename(text = "text")
+@app_commands.describe(text = "Text to convert to emojis")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         if len(text) > 230:
@@ -296,23 +305,26 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title=f'Text to Emoji - "{text}"',
-            description=gpt(
-                "gpt-3.5-turbo-16k",
-                gpt_prompt,
-                data["system_content"][0]["text_to_emoji"] + char_limit,
-                0.7,
-            ),
-            color=0x002AFF,
+            title = f'Text to Emoji - "{text}"',
+            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", gpt_prompt, data["system_content"][0]["text_to_emoji"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-3.5-turbo-16k",
+            #     gpt_prompt,
+            #     data["system_content"][0]["text_to_emoji"] + char_limit,
+            #     0.7,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -329,33 +341,37 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 @client.tree.command(
     name="gpt_text_to_block_letters", description="Converts text into block letters"
 )
-@app_commands.rename(text="text")
-@app_commands.describe(text="Text to convert into block letters")
+@app_commands.rename(text = "text")
+@app_commands.describe(text = "Text to convert into block letters")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title="Text to block letter emojis",
-            description=gpt(
-                "gpt-3.5-turbo-16k",
-                text,
-                data["system_content"][0]["text_to_block_letters"] + char_limit,
-                0.7,
-            ),
+            title = "Text to block letter emojis",
+            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["text_to_block_letters"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-3.5-turbo-16k",
+            #     text,
+            #     data["system_content"][0]["text_to_block_letters"] + char_limit,
+            #     0.7,
+            #     ),
+            
             color=0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -369,34 +385,38 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 
 
 # -------------------------- CODE DEBUG ----------------------------------
-@client.tree.command(name="gpt_debug_code", description="Debugs your code")
-@app_commands.rename(text="code")
-@app_commands.describe(text="Code to debug")
+@client.tree.command(name = "gpt_debug_code", description="Debugs your code")
+@app_commands.rename(text = "code")
+@app_commands.describe(text = "Code to debug")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title="Code Debug",
-            description=gpt(
-                "gpt-4",
-                text,
-                data["system_content"][0]["code_debug"] + char_limit,
-                0,
-            ),
-            color=0x002AFF,
+            title = "Code Debug",
+            description = await loop.run_in_executor(None, gpt, "gpt-4", text, data["system_content"][0]["code_debug"] + char_limit, 0),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-4",
+            #     text,
+            #     data["system_content"][0]["code_debug"] + char_limit,
+            #     0,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -411,35 +431,39 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 
 # -------------------------- SHORT STORY ----------------------------------
 @client.tree.command(
-    name="gpt_short_story", description="Writes a short story about a topic"
+    name = "gpt_short_story", description = "Writes a short story about a topic"
 )
-@app_commands.rename(text="story_prompt")
-@app_commands.describe(text="What do you want the story to be about?")
+@app_commands.rename(text = "story_prompt")
+@app_commands.describe(text = "What do you want the story to be about?")
 async def send(interaction: discord.Interaction, text: str):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title="Short Story",
-            description=gpt(
-                "gpt-4",
-                text,
-                data["system_content"][0]["short_story"],
-                0.7,
-            ),
-            color=0x002AFF,
+            title = "Short Story",
+            description = await loop.run_in_executor(None, gpt, "gpt-4", text, data["system_content"][0]["short_story"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     "gpt-4",
+            #     text,
+            #     data["system_content"][0]["short_story"],
+            #     0.7,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -453,14 +477,15 @@ async def send(interaction: discord.Interaction, text: str):  # noqa: F811
 
 
 # -------------------------- GENERAL QUESTION ----------------------------------
-@client.tree.command(name="gpt_general_question", description="For all your questions")
-@app_commands.rename(text="prompt")
-@app_commands.describe(text="What do you want to ask chatGPT?")
-@app_commands.describe(gpt_model="Possible options = gpt-4 or gpt-3.5 (gpt-3.5-turbo-16k abbreviated)")
+@client.tree.command(name = "gpt_general_question", description = "For all your questions")
+@app_commands.rename(text = "prompt")
+@app_commands.describe(text = "What do you want to ask chatGPT?")
+@app_commands.describe(gpt_model = "Possible options = gpt-4 or gpt-3.5 (gpt-3.5-turbo-16k abbreviated)")
 async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  # noqa: F811
     try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
 
         if len(text) > 230:
@@ -481,27 +506,29 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
                 gpt_model = "gpt-3.5-turbo-16k"
             else:
                 gpt_model = gpt_model.lower()
-            
-
+                
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
-            title=f'General Question - "{text}"',
-            description=gpt(
-                gpt_model,
-                gpt_prompt,
-                data["system_content"][0]["general_questions"],
-                0.7,
-            ),
-            color=0x002AFF,
+            title = f'General Question - "{text}"',
+            description = await loop.run_in_executor(None, gpt, gpt_model, gpt_prompt, data["system_content"][0]["general_questions"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     gpt_model,
+            #     gpt_prompt,
+            #     data["system_content"][0]["general_questions"],
+            #     0.7,
+            #     ),
+            
+            color = 0x002AFF,
         )
         embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
         )
 
         # Send as followup message
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed = embed)
     except Exception as e:
         # Handle exceptions
         print(f"An error occurred: {str(e)}")
@@ -514,15 +541,15 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
             await interaction.followup.send("An error occurred while processing the command.")
         
 # -------------------------- DALLE 3 ----------------------------------
-@client.tree.command(name="dalle_3", description="Generates an image with DALL·E 3")
-@app_commands.describe(prompt="Describe the image you want DALL·E 3 to create")
-@app_commands.describe(img_dimensions="Must be either 1024x1024, 1792x1024, or 1024x1792 for dall-e-3")
-@app_commands.describe(img_quality="Must be either hd or standard. HD = images with finer details and greater consistency across the image.")
-@app_commands.describe(img_style="Must be either vivid or natural. Vivid = hyper-real and dramatic images. Natural = more natural, less hyper-real looking images.")
+@client.tree.command(name = "dalle_3", description="Generates an image with DALL·E 3")
+@app_commands.describe(prompt = "Describe the image you want DALL·E 3 to create")
+@app_commands.describe(img_dimensions = "Must be either 1024x1024, 1792x1024, or 1024x1792 for dall-e-3")
+@app_commands.describe(img_quality = "Must be either hd or standard. HD = images with finer details and greater consistency across the image.")
+@app_commands.describe(img_style = "Must be either vivid or natural. Vivid = hyper-real and dramatic images. Natural = more natural, less hyper-real looking images.")
 async def send(interaction: discord.Interaction, prompt: str, img_dimensions: str, img_quality: str, img_style: str):  # noqa: F811
     try:
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
         
         # Get the current time
@@ -573,13 +600,13 @@ async def send(interaction: discord.Interaction, prompt: str, img_dimensions: st
             await interaction.followup.send("An error occurred while processing the command.")
         
 # -------------------------- DALLE 2 ----------------------------------
-@client.tree.command(name="dalle_2", description="Generates an image with DALL·E 2")
-@app_commands.describe(prompt="Describe the image you want DALL·E 2 to create")
-@app_commands.describe(img_dimensions="Must be either 256x256, 512x512, or 1024x1024 for dall-e-2")
+@client.tree.command(name = "dalle_2", description = "Generates an image with DALL·E 2")
+@app_commands.describe(prompt = "Describe the image you want DALL·E 2 to create")
+@app_commands.describe(img_dimensions = "Must be either 256x256, 512x512, or 1024x1024 for dall-e-2")
 async def send(interaction: discord.Interaction, prompt: str, img_dimensions: str):  # noqa: F811
     try:
         await interaction.response.defer(
-            ephemeral=False
+            ephemeral = False
         )  # Defer the response to prevent command timeout
         
         # Get the current time
