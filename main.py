@@ -3,7 +3,7 @@ from discord import app_commands
 import sys
 import os
 from dotenv import load_dotenv
-from Chat_GPT_Function import gpt, dalle3, dalle2
+from Chat_GPT_Function import gpt, deepseek, dalle3, dalle2
 import json
 from datetime import datetime, timedelta
 import time
@@ -56,14 +56,14 @@ class MyClient(discord.Client):
     # Instead of specifying a guild to every command, we copy over our global commands instead.
     # By doing so, we don't have to wait up to an hour until they are shown to the end-user.
     # This allows for faster bot testing and development.
-    async def setup_hook(self):
-        # This copies the global commands over to your guild(s).
-        self.tree.clear_commands(guild=discord_server_1)  # Prevents command duplication.
-        await self.tree.sync(guild=discord_server_1)
-        self.tree.clear_commands(guild=discord_server_2)
-        await self.tree.sync(guild=discord_server_2)  # Prevents command duplication.
-        # You can replace these 4 lines with "await self.tree.sync()" if you want the bots commands to...
-        # be added to all servers its in (won't take long if your bot isn't in many servers otherwise it could take up to an hour)
+   
+    # async def setup_hook(self):
+    #     self.tree.copy_global_to(guild=discord_server_1)
+    #     self.tree.copy_global_to(guild=discord_server_2)
+        
+    #     # Final sync to add all commands
+    #     await self.tree.sync(guild=discord_server_1)
+    #     await self.tree.sync(guild=discord_server_2)
 
 
 intents = discord.Intents.default()
@@ -86,7 +86,49 @@ async def on_ready():
     # )
     # await dm_user.send("Bot Online!")
     # Uncomment this if you want the bot to dm you when it turns on
-
+    
+    
+@client.tree.command(name="sync", description="Syncs slash commands to the servers (Owner only)")
+async def sync(interaction: discord.Interaction):
+    if interaction.user.id != owner_uid:
+        await interaction.response.send_message(
+            "You don't have permission to sync commands.", 
+            ephemeral=True
+        )
+        return
+        
+    try:
+        await interaction.response.defer(ephemeral=True)
+        
+        # First clear all commands everywhere
+        # client.tree.clear_commands(guild=None)  # Clear global commands
+        client.tree.clear_commands(guild=discord_server_1)
+        client.tree.clear_commands(guild=discord_server_2)
+        
+        # Sync to clear the commands first
+        # await client.tree.sync()  # Sync globally to clear
+        await client.tree.sync(guild=discord_server_1)  # Sync to guilds to clear
+        await client.tree.sync(guild=discord_server_2)
+        
+        # Now copy commands to guilds
+        client.tree.copy_global_to(guild=discord_server_1)
+        client.tree.copy_global_to(guild=discord_server_2)
+        
+        # Final sync to add all commands
+        await client.tree.sync(guild=discord_server_1)
+        await client.tree.sync(guild=discord_server_2)
+        
+        await interaction.followup.send(
+            "Successfully synced commands to the servers!", 
+            ephemeral=True
+        )
+    except Exception as e:
+        print(f"An error occurred while syncing: {str(e)}")
+        await interaction.followup.send(
+            "An error occurred while syncing commands.", 
+            ephemeral=True
+        )
+    
 
 # -------------------------- HELP COMMAND ----------------------------------
 @client.tree.command(name="help", description="Lists all commands")
@@ -539,7 +581,61 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
             await interaction.followup.send(f"An error occurred: {error_message}")
         else:
             await interaction.followup.send("An error occurred while processing the command.")
+            
+
+# -------------------------- DEEPSEEK GENERAL QUESTION ----------------------------------
+@client.tree.command(name = "deepseek", description = "For all your questions")
+@app_commands.rename(text = "prompt")
+@app_commands.describe(text = "What do you want to ask deepseek?")
+async def send(interaction: discord.Interaction, text: str,):  # noqa: F811
+    try:
+        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
+        await interaction.response.defer(
+            ephemeral = False
+        )  # Defer the response to prevent command timeout
+
+        if len(text) > 230:
+            await interaction.followup.send(
+                "Prompt is too long please try again (max prompt length is 230 characters)"
+            )
+            return
+        else:
+            deepseek_prompt = text
+                
+        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
+        embed = discord.Embed(
+            title = f'General Question - "{text}"',
+            description = await loop.run_in_executor(None, deepseek, deepseek_prompt, data["system_content"][0]["general_questions_deepseek"]),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            
+            # gpt(
+            #     gpt_model,
+            #     gpt_prompt,
+            #     data["system_content"][0]["general_questions"],
+            #     0.7,
+            #     ),
+            
+            color = 0x002AFF,
+        )
+        embed.set_author(
+            name = "GPT Bot",
+            url = "https://www.alby08.com",
+            icon_url = client.user.avatar.url,
+        )
+
+        # Send as followup message
+        await interaction.followup.send(embed = embed)
+    except Exception as e:
+        # Handle exceptions
+        print(f"An error occurred: {str(e)}")
         
+        # Check if the error is a content policy violation
+        if "content_policy_violation" in str(e):
+            error_message = str(e).split("message': '")[1].split("',")[0]
+            await interaction.followup.send(f"An error occurred: {error_message}")
+        else:
+            await interaction.followup.send("An error occurred while processing the command.")
+
+       
 # -------------------------- DALLE 3 ----------------------------------
 @client.tree.command(name = "dalle_3", description="Generates an image with DALL·E 3")
 @app_commands.describe(prompt = "Describe the image you want DALL·E 3 to create")
