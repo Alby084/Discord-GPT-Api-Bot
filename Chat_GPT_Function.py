@@ -123,60 +123,7 @@ def deepseek(prompt: str, sys_prompt: str, max_retries = 3):
             raise Exception(f"Invalid JSON response after {max_retries} attempts")
             
     raise Exception("All retry attempts failed")
-    
-     
-    # client = OpenAI(
-    #     base_url = "https://openrouter.ai/api/v1",
-    #     api_key = openrouter_deepseek_api_key
-    # )
-    # response = client.chat.completions.create(
-    #     model = "deepseek/deepseek-r1:free",
-    #     messages = [
-    #         {
-    #             "role": "system",
-    #             "content": sys_prompt
-    #         },
-    #         {
-    #             "role": "user",
-    #             "content": prompt
-    #         }
-    #     ],
-    #     provider = {
-    #         "order": ["Chutes", "Targon", "Azure"],
-    #         "allow_fallbacks": False,
-    #     },
-    #     include_reasoning = True, # Include reasoning in response
-    # )
-    
-    # # Access reasoning if available
-    # try:
-    #     if hasattr(response.choices[0].message, "reasoning"):
-    #         print(response.choices[0].message.reasoning.strip())
-    # except AttributeError:
-    #     print("No reasoning provided in response")
-    
-    # output = response.choices[0].message.content.strip()
-    # return output
 
-# client = OpenAI(
-#   base_url="https://openrouter.ai/api/v1",
-#   api_key="<OPENROUTER_API_KEY>",
-# )
-
-# completion = client.chat.completions.create(
-#   extra_headers={
-#     "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai.
-#     "X-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai.
-#   },
-#   model="deepseek/deepseek-r1:free",
-#   messages=[
-#     {
-#       "role": "user",
-#       "content": "What is the meaning of life?"
-#     }
-#   ]
-# )
-# print(completion.choices[0].message.content)
 
 def dalle3(prompt: str, quality: str, size: str, style: str):
     client = OpenAI(api_key= gpt_api_key)
