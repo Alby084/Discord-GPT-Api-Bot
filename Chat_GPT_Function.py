@@ -1,7 +1,7 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
-import deepseek
+import openrouter
 
 load_dotenv(override=True)
 
@@ -32,7 +32,7 @@ def gpt(model: str, prompt: str, sys_prompt: str, temp: float):
     return output
 
 def deepseek(prompt: str, sys_prompt: str, temp: float):
-    client = deepseek.Client(api_key=deepseek_api_key)
+    client = openrouter.Client(api_key=deepseek_api_key)
     response = client.chat.create(
         prompt=prompt,
         system_prompt=sys_prompt,
