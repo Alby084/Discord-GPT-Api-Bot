@@ -510,7 +510,7 @@ async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  #
         # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
         embed = discord.Embed(
             title = f'General Question - "{text}"',
-            description = await loop.run_in_executor(None, gpt, gpt_model, gpt_prompt, data["system_content"][0]["general_questions"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
+            description = await loop.run_in_executor(None, gpt, gpt_model, gpt_prompt, data["system_content"][0]["general_questions_gpt"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
             
             # gpt(
             #     gpt_model,
