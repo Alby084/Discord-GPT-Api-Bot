@@ -20,14 +20,19 @@ pip install openai~=1.61.0
 pip install python-dotenv~=1.0.1
 ```
 
+```bash
+pip install requests~=2.32.3
+```
+
 # ``.env`` File settup
 
 1. Create a ``.env`` file in the bot's root folder. (Same folder as main.py)
-2. Format the ``.env`` file as follows, replacing ``TOKEN_HERE``, ``OWNER_UID_HERE``, ``CHAT_GPT_API_KEY_HERE``, ``DISCORD_SERVER_1`` and ``DISCORD_SERVER_2`` with your bot's token, your Discord UID, ChatGPT API key and discord server ID's respectively. Keeping the double quotation marks.
+2. Format the ``.env`` file as follows, replacing ``TOKEN_HERE``, ``OWNER_UID_HERE``, ``CHAT_GPT_API_KEY_HERE``, ``OPENROUTER_DEEPSEEK_API_KEY``, ``DISCORD_SERVER_1`` and ``DISCORD_SERVER_2`` with your bot's token, your Discord UID, ChatGPT API key, openrouter api key and discord server ID's respectively. Keeping the double quotation marks.
 ```text
 BOT_TOKEN = "TOKEN_HERE"
 OWNER_ID = "OWNER_UID_HERE"
 GPT_API_KEY = "CHAT_GPT_API_KEY_HERE"
+OPENROUTER_DEEPSEEK_API_KEY = "OPENROUTER_DEEPSEEK_API_KEY_HERE"
 DISCORD_SERVER_1 = "FIRST_DISCORD_SERVER_ID_HERE"
 DISCORD_SERVER_2 = "SECOND_DISCORD_SERVER_ID_HERE"
 ```
@@ -36,6 +41,7 @@ For example:
 BOT_TOKEN = "12ab56c89"
 OWNER_ID = "123456789"
 GPT_API_KEY = "12ab56c89"
+OPENROUTER_DEEPSEEK_API_KEY = "12ab56c89"
 DISCORD_SERVER_1 = "123456789"
 DISCORD_SERVER_2 = "123456789"
 ```
@@ -115,3 +121,8 @@ and click ``Copy Server ID`` as shown below:
 
 ### Note on GPT ``Credit balance``:
 Ensure you have an available ``Credit balance``. You can check on the ``Billing`` page in ``Settings`` or by clicking [Here](https://platform.openai.com/settings/organization/billing/overview). If you do not have a ``Credit balance`` you will need to add money (credit) to your account otherwise this discord bot's chat GPT functionality will not work.
+
+### Getting DeepSeek API key via openrouter
+as DeepSeek's api is currently down you will have to use OpenRouter to access the DeepSeek AI. ``Ensure you have selected the free DeepSeek-R1 model on Openrouter``.
+1. navigate to the [openrouter API key page.](https://openrouter.ai/settings/keys)
+2. Click the ``Create Key`` button.
