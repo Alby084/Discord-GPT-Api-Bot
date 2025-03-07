@@ -24,6 +24,13 @@ pip install python-dotenv~=1.0.1
 pip install requests~=2.32.3
 ```
 
+### IMPORTANT NOTE
+If you get an error `No module named 'audioop'` when trying to run `main.py` with `python 3.13` you will need to install the audioop-lts package with:
+
+```bash
+pip install audioop-lts
+```
+
 # ``.env`` File settup
 
 1. Create a ``.env`` file in the bot's root folder. (Same folder as main.py)
