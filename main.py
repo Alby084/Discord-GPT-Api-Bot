@@ -197,6 +197,7 @@ async def shutdown_bot(interaction: discord.Interaction):
 @app_commands.describe(to_delete="Number of messages to delete")
 async def send(interaction: discord.Interaction, to_delete: int):  # noqa: F811
     await interaction.response.defer(ephemeral=True)
+    date = datetime.now()
     if not interaction.user.guild_permissions.manage_messages:
         await interaction.followup.send("Invalid permissions")
         return
@@ -205,9 +206,10 @@ async def send(interaction: discord.Interaction, to_delete: int):  # noqa: F811
         return
     else:
         await interaction.followup.send("Deleting...")
+        await asyncio.sleep(1)
         await interaction.channel.purge(limit=to_delete)
         await interaction.edit_original_response(
-            content=f"Deleted {to_delete} messages."
+            content=f"Deleted {to_delete} messages. {date.strftime("%d/%m/%Y %I:%M%p").lower()}"
         )
 
 
