@@ -1,5 +1,6 @@
 import discord
-from discord import app_commands
+import functools
+from discord import app_commands, ui # Import ui for Views
 import sys
 import os
 from dotenv import load_dotenv
@@ -8,181 +9,404 @@ import json
 from datetime import datetime, timedelta
 import time
 import asyncio
+import logging
+import math # Import math for ceiling division
 
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(name)s: %(message)s')
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
 load_dotenv(override=True)
 
-with open("GPT_Parameters.json") as f:
-    data = json.load(f)  # Loads the gpt system prompts
+# --- Environment Variable Loading and Validation ---
+error_messages = [] # Stores critical errors that prevent startup
+warnings = [] # Stores warnings about missing optional features
 
-char_limit = data["system_content"][0][
-    "character_limit_prompt"]  # Makes sure that the gpt output won't exceed the discord embed character limit of 4096 characters
+token = os.getenv("BOT_TOKEN")
+owner_id_str = os.getenv("OWNER_ID")
+gpt_key = os.getenv("GPT_API_KEY")
+openrouter_deepseek_key = os.getenv("OPENROUTER_DEEPSEEK_API_KEY") # Load the Deepseek key
+discord_server_1_str = os.getenv("DISCORD_SERVER_1")
+discord_server_2_str = os.getenv("DISCORD_SERVER_2") # Optional
 
+owner_uid = None
+discord_server_1_id = None
+discord_server_2_id = None # Initialize optional server ID as None
+
+# Validate BOT_TOKEN (Required)
+if not token:
+    error_messages.append("CRITICAL: BOT_TOKEN environment variable is not set.")
+
+# Validate OWNER_ID (Required)
+if owner_id_str:
+    try:
+        owner_uid = int(owner_id_str)
+    except ValueError:
+        error_messages.append("CRITICAL: OWNER_ID environment variable must be a valid integer.")
+else:
+    error_messages.append("CRITICAL: OWNER_ID environment variable is not set.")
+
+# Validate GPT_API_KEY (Treating as Required for core functionality)
+if not gpt_key:
+    error_messages.append("CRITICAL: GPT_API_KEY environment variable is not set.")
+
+# Validate OPENROUTER_DEEPSEEK_API_KEY (Optional - Log Warning if missing)
+if not openrouter_deepseek_key:
+    error_messages.append("CRITICAL: OPENROUTER_DEEPSEEK_API_KEY is not set.")
+# else:
+#     # Optional: Log confirmation that the key was found
+#     logger.info("OPENROUTER_DEEPSEEK_API_KEY found.")
+
+
+# Validate DISCORD_SERVER_1 (Required)
+if discord_server_1_str:
+    try:
+        discord_server_1_id = int(discord_server_1_str)
+    except ValueError:
+        error_messages.append("CRITICAL: DISCORD_SERVER_1 environment variable must be a valid integer.")
+else:
+    error_messages.append("CRITICAL: DISCORD_SERVER_1 environment variable is not set.")
+
+# Validate DISCORD_SERVER_2 (Optional)
+if discord_server_2_str:
+    try:
+        discord_server_2_id = int(discord_server_2_str)
+        logger.info(f"Optional Discord Server 2 ID loaded: {discord_server_2_id}")
+    except ValueError:
+        # Log warning but don't prevent startup
+        warnings.append(f"Warning: DISCORD_SERVER_2 is set ('{discord_server_2_str}') but is not a valid integer. Ignoring.")
+        # Keep discord_server_2_id as None
+else:
+    logger.info("Optional Discord Server 2 ID (DISCORD_SERVER_2) not set.")
+
+# Log any warnings found
+if warnings:
+    logger.warning("Configuration warnings:")
+    for msg in warnings:
+        logger.warning(f"- {msg}")
+
+# Exit if any CRITICAL variables are missing or invalid
+if error_messages:
+    logger.critical("Critical configuration errors found:")
+    for msg in error_messages:
+        logger.critical(f"- {msg}")
+    sys.exit("Exiting due to critical missing or invalid environment variables.")
+else:
+    logger.info("Required environment variables loaded successfully.")
+
+# --- End Environment Variable Loading ---
+
+# Create discord.Object instances only for valid server IDs
+discord_server_1 = discord.Object(id=discord_server_1_id)
+discord_server_2 = discord.Object(id=discord_server_2_id) if discord_server_2_id else None # Create Object only if ID is valid
+
+# Load GPT Parameters from JSON
 try:
-    token = os.getenv("BOT_TOKEN")  # returns a str
-    owner_uid = int(os.getenv("OWNER_ID"))  # returns an int
-    gpt_key = os.getenv("GPT_API_KEY")  # returns a str
-    discord_server_1 = int(
-        os.getenv("DISCORD_SERVER_1")
-    )  # Discord Server ID 1 returns int
-    discord_server_2 = int(
-        os.getenv("DISCORD_SERVER_2")
-    )  # Discord Server ID 2 returns int (this one is optional)
-except (TypeError, ValueError):
-    sys.exit(
-        "Error: One or more environment variables are not set or contain invalid values."
-    )  # Stops the bot from starting if the .env is formatted wrong
+    with open("GPT_Parameters.json") as f:
+        data = json.load(f)  # Loads the gpt system prompts
+    # Ensure 'character_limit_prompt' exists, provide default if not
+    char_limit = data.get("system_content", [{}])[0].get("character_limit_prompt", " Your response must not exceed 4096 characters")
+except FileNotFoundError:
+    logger.error("Error: GPT_Parameters.json not found.")
+    sys.exit("Exiting due to missing configuration file.")
+except (KeyError, IndexError, json.JSONDecodeError) as e:
+    logger.error(f"Error reading GPT_Parameters.json: {e}")
+    sys.exit("Exiting due to invalid configuration file format.")
 
-discord_server_1 = discord.Object(
-    id=discord_server_1
-)  # Discord Server ID 1 returns int
-discord_server_2 = discord.Object(
-    id=discord_server_2
-)  # Discord Server ID 2 returns int (this one is optional)
+
+# --- Help Command Pagination View ---
+class HelpView(ui.View):
+    def __init__(self, *, commands: list, items_per_page: int, interaction: discord.Interaction):
+        super().__init__(timeout=180.0)  # View times out after 180 seconds
+        self.commands = commands
+        self.items_per_page = items_per_page
+        self.total_pages = math.ceil(len(self.commands) / self.items_per_page)
+        self.current_page = 1
+        self.interaction = interaction # Store the original interaction
+        self.update_buttons() # Initial button state
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Only allow the original user to interact with the buttons
+        if interaction.user.id != self.interaction.user.id:
+            await interaction.response.send_message("You cannot control this help menu.", ephemeral=True)
+            return False
+        return True
+
+    async def on_timeout(self):
+        # Disable buttons on timeout
+        for item in self.children:
+            if isinstance(item, ui.Button):
+                item.disabled = True
+        try:
+            # Edit the original message to show disabled buttons
+            await self.interaction.edit_original_response(view=self)
+        except discord.NotFound:
+            logger.warning("Original help message not found for timeout update.")
+        except discord.HTTPException as e:
+             logger.error(f"Failed to edit help message on timeout: {e}")
+
+    def get_page_embed(self) -> discord.Embed:
+        """Generates the embed for the current page."""
+        start_index = (self.current_page - 1) * self.items_per_page
+        end_index = start_index + self.items_per_page
+        page_commands = self.commands[start_index:end_index]
+
+        embed = discord.Embed(
+            title=f"Help - Page {self.current_page}/{self.total_pages}",
+            description="Here are the available commands:",
+            color=discord.Color.blue(),
+        )
+        # Use bot's avatar URL safely
+        avatar_url = self.interaction.client.user.avatar.url if self.interaction.client.user.avatar else None
+        embed.set_author(
+            name=self.interaction.client.user.name,
+            icon_url=avatar_url,
+        )
+
+        if not page_commands:
+            embed.description = "No commands found on this page."
+        else:
+            for command in page_commands:
+                # --- Potential Problem Area ---
+                field_name = f"/{command.name}"
+                # The current code handles `None` description, but maybe not an empty string ""?
+                field_value = command.description or 'No description available.'
+
+                # Add checks to ensure name and value are not empty before adding
+                if not field_name or not field_value:
+                     logger.warning(f"Skipping command '{command.name}' in help embed due to empty name/value. Name: '{field_name}', Value: '{field_value}'")
+                     continue # Skip adding this field if either part is empty
+
+                # Also check lengths (optional but good practice)
+                if len(field_name) > 256:
+                    logger.warning(f"Command name '/{command.name}' exceeds 256 chars, truncating for help.")
+                    field_name = field_name[:253] + "..." # Truncate safely
+                if len(field_value) > 1024:
+                    logger.warning(f"Command description for '/{command.name}' exceeds 1024 chars, truncating for help.")
+                    field_value = field_value[:1021] + "..." # Truncate safely
+
+                embed.add_field(
+                    name=field_name,
+                    value=field_value,
+                    inline=False,
+                )
+
+        embed.set_footer(text=f"Showing commands {start_index + 1}-{min(end_index, len(self.commands))} of {len(self.commands)}")
+        return embed
+
+    def update_buttons(self):
+        """Enable/disable buttons based on the current page."""
+        # Find buttons by custom_id (more reliable than order)
+        prev_button = discord.utils.get(self.children, custom_id="prev_page")
+        next_button = discord.utils.get(self.children, custom_id="next_page")
+
+        if prev_button:
+            prev_button.disabled = self.current_page == 1
+        if next_button:
+            next_button.disabled = self.current_page == self.total_pages
+
+    @ui.button(label="Previous", style=discord.ButtonStyle.blurple, custom_id="prev_page", emoji="⬅️")
+    async def previous_page(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.update_buttons()
+            embed = self.get_page_embed()
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+             # Should be disabled, but handle defensively
+             await interaction.response.defer()
+
+
+    @ui.button(label="Next", style=discord.ButtonStyle.blurple, custom_id="next_page", emoji="➡️")
+    async def next_page(self, interaction: discord.Interaction, button: ui.Button):
+        if self.current_page < self.total_pages:
+            self.current_page += 1
+            self.update_buttons()
+            embed = self.get_page_embed()
+            await interaction.response.edit_message(embed=embed, view=self)
+        else:
+            # Should be disabled, but handle defensively
+            await interaction.response.defer()
+
+# --- End Help Command Pagination View ---
 
 
 class MyClient(discord.Client):
     def __init__(self, *, intents: discord.Intents):
         super().__init__(intents=intents)
-        # A CommandTree is a special type that holds all the application command
-        # state required to make it work. This is a separate class because it
-        # allows all the extra states to be opt-in.
-        # Whenever you want to work with application commands, your tree is used
-        # to store and work with them.
-        # Note: When using commands.Bot instead of discord.Client, the bot will
-        # maintain its own tree instead.
         self.tree = app_commands.CommandTree(self)
 
-    # In this, we just synchronize the app commands to specified guilds.
-    # Instead of specifying a guild to every command, we copy over our global commands instead.
-    # By doing so, we don't have to wait up to an hour until they are shown to the end-user.
-    # This allows for faster bot testing and development.
-   
+    # Optional: Uncomment and adjust setup_hook if you want auto-syncing on startup
     # async def setup_hook(self):
+    #     logger.info(f"Copying global commands to guild {discord_server_1.id}...")
     #     self.tree.copy_global_to(guild=discord_server_1)
-    #     self.tree.copy_global_to(guild=discord_server_2)
-        
-    #     # Final sync to add all commands
     #     await self.tree.sync(guild=discord_server_1)
-    #     await self.tree.sync(guild=discord_server_2)
+    #     logger.info(f"Synced commands to guild {discord_server_1.id}.")
+    #
+    #     if discord_server_2: # Only sync to server 2 if it's configured
+    #         logger.info(f"Copying global commands to guild {discord_server_2.id}...")
+    #         self.tree.copy_global_to(guild=discord_server_2)
+    #         await self.tree.sync(guild=discord_server_2)
+    #         logger.info(f"Synced commands to guild {discord_server_2.id}.")
+    #     logger.info("Command sync process completed in setup_hook.")
 
 
 intents = discord.Intents.default()
+# Required for clear command potentially, depending on exact discord.py version and usage
+# intents.messages = True # Uncomment if needed for message content or certain purge operations
+intents.message_content = False # Explicitly disable if not needed
+
 client = MyClient(intents=intents)
 
 
 @client.event
 async def on_ready():
-    print(
-        f"--------------------------------------------- \nLogged in as {client.user} (ID: {client.user.id}) \n---------------------------------------------"
-    )
+    logger.info(f"---------------------------------------------")
+    logger.info(f"Logged in as {client.user} (ID: {client.user.id})")
+    logger.info(f"discord.py version: {discord.__version__}")
+    logger.info(f"Owner ID: {owner_uid}")
+    logger.info(f"Primary Guild ID: {discord_server_1.id}")
+    if discord_server_2:
+        logger.info(f"Secondary Guild ID: {discord_server_2.id}")
+    else:
+        logger.info(f"Secondary Guild ID: Not configured")
+    logger.info(f"---------------------------------------------")
+
     await client.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching, name="For Slash Commands"
         )
-    )  # This changes the activity that is displayed under the bots name in the members list.
+    )
 
-    # dm_user = await client.fetch_user(
-    #     owner_uid
-    # )
-    # await dm_user.send("Bot Online!")
-    # Uncomment this if you want the bot to dm you when it turns on
-    
-    
+    # Optional: DM owner on startup
+    # try:
+    #     dm_user = await client.fetch_user(owner_uid)
+    #     await dm_user.send("Bot Online!")
+    #     logger.info(f"Sent online notification DM to owner (ID: {owner_uid}).")
+    # except discord.NotFound:
+    #     logger.warning(f"Could not find owner user with ID {owner_uid} to send DM.")
+    # except discord.Forbidden:
+    #     logger.warning(f"Bot lacks permission to DM owner user (ID: {owner_uid}).")
+    # except Exception as e:
+    #     logger.error(f"Failed to send online notification DM: {e}")
+
+
 @client.tree.command(name="sync", description="Syncs slash commands to the servers (Owner only)")
 async def sync(interaction: discord.Interaction):
     if interaction.user.id != owner_uid:
         await interaction.response.send_message(
-            "You don't have permission to sync commands.", 
+            "You don't have permission to sync commands.",
             ephemeral=True
         )
         return
-        
-    try:
-        await interaction.response.defer(ephemeral=True)
-        
-        # First clear all commands everywhere
-        # client.tree.clear_commands(guild=None)  # Clear global commands
-        client.tree.clear_commands(guild=discord_server_1)
-        client.tree.clear_commands(guild=discord_server_2)
-        
-        # Sync to clear the commands first
-        # await client.tree.sync()  # Sync globally to clear
-        await client.tree.sync(guild=discord_server_1)  # Sync to guilds to clear
-        await client.tree.sync(guild=discord_server_2)
-        
-        # Now copy commands to guilds
-        client.tree.copy_global_to(guild=discord_server_1)
-        client.tree.copy_global_to(guild=discord_server_2)
-        
-        # Final sync to add all commands
-        await client.tree.sync(guild=discord_server_1)
-        await client.tree.sync(guild=discord_server_2)
-        
-        await interaction.followup.send(
-            "Successfully synced commands to the servers!", 
-            ephemeral=True
-        )
-    except Exception as e:
-        print(f"An error occurred while syncing: {str(e)}")
-        await interaction.followup.send(
-            "An error occurred while syncing commands.", 
-            ephemeral=True
-        )
-    
 
-# -------------------------- HELP COMMAND ----------------------------------
-@client.tree.command(name="help", description="Lists all commands")
-async def send(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    logger.info(f"Sync command initiated by owner (ID: {interaction.user.id}).")
+
     try:
-        await interaction.response.defer(
-            ephemeral=False
-        )  # Defer the response to prevent command timeout
-        embed = discord.Embed(
-            title="Command List",
-            description="-----------------------------------------",
-            color=0x002AFF,
-        )
-        embed.set_author(
-            name="GPT Bot",
-            url="https://www.alby08.com",
-            icon_url=client.user.avatar.url,
-        )
-        for slash_command in client.tree.walk_commands():
-            embed.add_field(
-                name=slash_command.name,
-                value=f"- {slash_command.description}\n-----------------------------------------"
-                if slash_command.description
-                else slash_command.name,
-                inline=False,
-            )
-        # Send as followup message
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
+        synced_guilds = []
+        # Clear and sync for server 1
+        logger.info(f"Clearing commands for guild {discord_server_1.id}...")
+        client.tree.clear_commands(guild=discord_server_1)
+        await client.tree.sync(guild=discord_server_1)
+        logger.info(f"Copying global commands to guild {discord_server_1.id}...")
+        client.tree.copy_global_to(guild=discord_server_1)
+        await client.tree.sync(guild=discord_server_1)
+        synced_guilds.append(str(discord_server_1.id))
+        logger.info(f"Successfully synced commands for guild {discord_server_1.id}.")
+
+        # Clear and sync for server 2 if it exists
+        if discord_server_2:
+            logger.info(f"Clearing commands for guild {discord_server_2.id}...")
+            client.tree.clear_commands(guild=discord_server_2)
+            await client.tree.sync(guild=discord_server_2)
+            logger.info(f"Copying global commands to guild {discord_server_2.id}...")
+            client.tree.copy_global_to(guild=discord_server_2)
+            await client.tree.sync(guild=discord_server_2)
+            synced_guilds.append(str(discord_server_2.id))
+            logger.info(f"Successfully synced commands for guild {discord_server_2.id}.")
+        else:
+             logger.info("Skipping sync for optional second server (not configured).")
+
         await interaction.followup.send(
-            "An error occurred while processing the command."
+            f"Successfully synced commands to guilds: {', '.join(synced_guilds)}",
+            ephemeral=True
         )
+    except discord.HTTPException as e:
+        logger.error(f"HTTPException during sync: {e.status} {e.text}")
+        await interaction.followup.send(
+            f"An error occurred during sync (HTTP {e.status}). Check logs.",
+            ephemeral=True
+        )
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred during sync:") # Logs traceback
+        await interaction.followup.send(
+            "An unexpected error occurred while syncing commands. Check logs.",
+            ephemeral=True
+        )
+
+
+# -------------------------- HELP COMMAND (PAGINATED) ----------------------------------
+@client.tree.command(name="help", description="Lists all available slash commands")
+async def help_command(interaction: discord.Interaction):
+    try:
+        # Get all registered commands
+        all_commands = client.tree.get_commands()
+
+        # Filter out owner-only commands if the user is not the owner
+        if interaction.user.id != owner_uid:
+            commands_to_show = [cmd for cmd in all_commands if cmd.name not in ["sync", "shutdown"]]
+        else:
+            commands_to_show = all_commands # Owner sees all commands
+
+        # Sort commands alphabetically by name
+        commands_to_show.sort(key=lambda cmd: cmd.name)
+
+        if not commands_to_show:
+            await interaction.response.send_message("There are no commands available for you to use.", ephemeral=True)
+            return
+
+        # Define how many commands per page
+        commands_per_page = 5 # Adjust as needed
+
+        # Create the view instance, passing the filtered commands and interaction
+        view = HelpView(commands=commands_to_show, items_per_page=commands_per_page, interaction=interaction)
+
+        # Get the embed for the first page
+        first_page_embed = view.get_page_embed()
+
+        # Send the initial message with the first page and the view
+        await interaction.response.send_message(embed=first_page_embed, view=view, ephemeral=False) # Make help visible
+
+    except Exception as e:
+        logger.exception("Error occurred in help command:")
+        # Avoid sending again if already responded/deferred
+        if not interaction.response.is_done():
+            await interaction.response.send_message("An error occurred while fetching the command list.", ephemeral=True)
+        else:
+            await interaction.followup.send("An error occurred while fetching the command list.", ephemeral=True)
 
 
 # -------------------------- TEST COMMAND ----------------------------------
 @client.tree.command(name="test_bot", description="Replies with 'Hello!'")
 async def running_test(interaction: discord.Interaction):
     await interaction.response.send_message(
-        f"Hello, {interaction.user.mention}", ephemeral=True
-    )  # ephemeral=True means the bots response is only visible
-    # to the user who used the command.
+        f"Hello, {interaction.user.mention}!", ephemeral=True
+    )
 
 
 # -------------------------- SHUTDOWN ----------------------------------
 @client.tree.command(
-    name="shutdown", description="Shuts down the bot if you are the bot owner"
-)  # Shuts down the bot if the user matches the owner_uid
+    name="shutdown", description="Shuts down the bot (Owner only)"
+)
 async def shutdown_bot(interaction: discord.Interaction):
     if interaction.user.id == owner_uid:
-        await interaction.response.send_message("Shutting down the bot...")
+        logger.warning(f"Shutdown command received from owner (ID: {interaction.user.id}). Shutting down.")
+        await interaction.response.send_message("Shutting down...", ephemeral=True)
         await client.close()
     else:
+        logger.warning(f"Unauthorized shutdown attempt by user (ID: {interaction.user.id}).")
         await interaction.response.send_message(
             "You don't have permission to shut down the bot.", ephemeral=True
         )
@@ -191,552 +415,363 @@ async def shutdown_bot(interaction: discord.Interaction):
 # -------------------------- DELETE MESSAGES ----------------------------------
 @client.tree.command(
     name="clear",
-    description="Deletes defined number of messages from the current channel.",
+    description="Deletes a specified number of messages from the current channel.",
 )
-@app_commands.rename(to_delete="messages")
-@app_commands.describe(to_delete="Number of messages to delete")
-async def send(interaction: discord.Interaction, to_delete: int):  # noqa: F811
-    await interaction.response.defer(ephemeral=True)
-    date = datetime.now()
-    if not interaction.user.guild_permissions.manage_messages:
-        await interaction.followup.send("Invalid permissions")
-        return
-    if to_delete <= 0:
-        await interaction.followup.send("Invalid number")
-        return
-    else:
-        await interaction.followup.send("Deleting...")
-        await asyncio.sleep(1)
-        await interaction.channel.purge(limit=to_delete)
-        await interaction.edit_original_response(
-            content=f"Deleted {to_delete} messages. {date.strftime("%d/%m/%Y %I:%M%p").lower()}"
+@app_commands.checks.has_permissions(manage_messages=True) # Use decorator for permissions
+@app_commands.describe(amount="Number of messages to delete (1-100)")
+async def clear_messages(interaction: discord.Interaction, amount: app_commands.Range[int, 1, 100]): # Use Range for validation, renamed function
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    try:
+        deleted = await interaction.channel.purge(limit=amount)
+        timestamp = discord.utils.format_dt(datetime.now(), style='F') # Formatted timestamp
+        await interaction.followup.send(
+            f"Successfully deleted {len(deleted)} messages. ({timestamp})", ephemeral=True
         )
+        logger.info(f"User {interaction.user} cleared {len(deleted)} messages in channel {interaction.channel.id}.")
+    except discord.Forbidden:
+        logger.warning(f"Bot lacks 'Manage Messages' permission in channel {interaction.channel.id} for clear command.")
+        await interaction.followup.send("I don't have permission to delete messages in this channel.", ephemeral=True)
+    except discord.HTTPException as e:
+        logger.error(f"HTTPException during message purge: {e.status} {e.text}")
+        await interaction.followup.send("An error occurred while trying to delete messages.", ephemeral=True)
+    except Exception as e:
+        logger.exception("Unexpected error during clear command:")
+        await interaction.followup.send("An unexpected error occurred.", ephemeral=True)
+
+# Error handler for the clear command specifically for permission issues
+@clear_messages.error
+async def clear_messages_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+    else:
+        logger.error(f"Unhandled error in clear_messages: {error}")
+        # Avoid sending a generic error if response already sent/deferred
+        if not interaction.response.is_done():
+             await interaction.response.send_message("An unexpected error occurred.", ephemeral=True)
+        else:
+             await interaction.followup.send("An unexpected error occurred.", ephemeral=True)
 
 
 # -------------------------- BOT LATENCY ----------------------------------
-@client.tree.command(name="ping", description="Get bot latency")
+@client.tree.command(name="ping", description="Checks the bot's latency")
 async def ping(interaction: discord.Interaction):
     try:
-        await interaction.response.defer(
-            ephemeral=True
-        )  # Defer the response to prevent command timeout
-
-        # Get bot latency
+        start_time = time.monotonic()
+        # Defer first to acknowledge the command quickly
+        await interaction.response.defer(ephemeral=True, thinking=True)
         latency = round(client.latency * 1000)
+        end_time = time.monotonic()
+        # Calculate interaction latency (time from defer to now)
+        interaction_latency = round((end_time - start_time) * 1000)
 
-        # Send as followup message
-        await interaction.followup.send(f"Pong! Latency: {latency}ms")
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
         await interaction.followup.send(
-            "An error occurred while processing the command."
+            f"Pong! \nWebsocket Latency: {latency}ms\nInteraction Latency: {interaction_latency}ms",
+             ephemeral=True
         )
+    except Exception as e:
+        logger.exception("Error occurred in ping command:")
+        # Avoid sending again if already responded/deferred
+        if not interaction.response.is_done():
+            await interaction.response.send_message("An error occurred while measuring latency.", ephemeral=True)
+        else:
+            await interaction.followup.send("An error occurred while measuring latency.", ephemeral=True)
+
+
+# --- Helper Function for API Commands ---
+async def handle_api_command(interaction: discord.Interaction, title: str, api_func, *args):
+    """Handles common logic for API commands: defer, call API, format embed, send response, handle errors."""
+    try:
+        # Use thinking=True for potentially long API calls
+        await interaction.response.defer(ephemeral=False, thinking=True)
+
+        # Run the blocking API call in an executor
+        loop = asyncio.get_event_loop()
+        api_response = await loop.run_in_executor(None, api_func, *args)
+
+        if not api_response:
+             logger.warning(f"API call {api_func.__name__} returned empty response for prompt: {args[1] if len(args) > 1 else 'N/A'}")
+             await interaction.followup.send("The API returned an empty response. Please try again.", ephemeral=True)
+             return
+
+        # Check response length against Discord limits (Embed description limit is 4096)
+        if len(api_response) > 4096:
+            logger.warning(f"API response exceeded 4096 characters for {title}. Truncating.")
+            api_response = api_response[:4093] + "..." # Truncate safely
+
+        embed = discord.Embed(
+            title=title,
+            description=api_response,
+            color=discord.Color.blue(),
+        )
+        avatar_url = client.user.avatar.url if client.user.avatar else None
+        embed.set_author(
+            name=client.user.name,
+            icon_url=avatar_url,
+        )
+        # Optionally add timestamp or footer
+        embed.timestamp = datetime.now()
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        logger.exception(f"Error occurred in API command '{title}':")
+        error_message_user = "An error occurred while processing your request."
+        # Check for specific OpenAI content policy violation format if applicable
+        # (Adjust this based on the actual error structure from the OpenAI library)
+        if "content_policy_violation" in str(e):
+             try:
+                 # Attempt to extract a more specific message (this parsing is fragile)
+                 details = str(e).split("message': '", 1)[1].split("',", 1)[0]
+                 error_message_user = f"Content Policy Violation: {details}"
+             except IndexError:
+                 error_message_user = "Your request was flagged due to content policy."
+
+        # Use followup.send since we deferred
+        try:
+            await interaction.followup.send(error_message_user, ephemeral=True)
+        except discord.NotFound:
+             logger.error("Interaction expired before error message could be sent.")
+        except discord.HTTPException as http_err:
+             logger.error(f"Failed to send error followup: {http_err}")
 
 
 # -------------------------- CORRECT GRAMMAR ----------------------------------
 @client.tree.command(
     name = "gpt_correct_grammar", description = "Corrects grammar of inputted text"
 )
-@app_commands.rename(text = "text_to_correct")
 @app_commands.describe(text = "Text to grammar correct")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = "Correct Grammar",
-            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["correct_grammar"] + char_limit, 0),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-3.5-turbo-16k",
-            #     text,
-            #     data["system_content"][0]["correct_grammar"] + char_limit,
-            #     0,
-            #     ),
-            
-            color = 0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+async def gpt_correct_grammar(interaction: discord.Interaction, text: str): # Renamed function
+    # Safely get system prompt, provide default if missing
+    sys_prompt_base = data.get("system_content", [{}])[0].get("correct_grammar", "Correct the grammar:")
+    sys_prompt = sys_prompt_base + char_limit
+    await handle_api_command(interaction, "Corrected Grammar", gpt, "gpt-3.5-turbo-16k", text, sys_prompt, 0)
 
 
 # -------------------------- WEBSITE ----------------------------------
 @client.tree.command(
     name="gpt_single_page_website",
-    description="Creates a single paged website with embedded Javascript and CSS",
+    description="Generates HTML for a single-page website based on specifications",
 )
-@app_commands.rename(text = "website_prompt")
-@app_commands.describe(text = "Website page specifications")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
+@app_commands.describe(specifications = "Describe the website page you want")
+async def gpt_single_page_website(interaction: discord.Interaction, specifications: str): # Renamed function
+    sys_prompt_base = data.get("system_content", [{}])[0].get("single_page_website", "Create a single page website:")
+    sys_prompt = sys_prompt_base + char_limit
+    await handle_api_command(interaction, "Single Page Website Code", gpt, "gpt-3.5-turbo-16k", specifications, sys_prompt, 0.7)
 
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = "Single Page Website",
-            description= await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["single_page_website"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-3.5-turbo-16k",
-            #     text,
-            #     data["system_content"][0]["single_page_website"] + char_limit,
-            #     0.7,
-            #     ),
-            
-            color = 0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
 
 # -------------------------- TEXT TO EMOJI ----------------------------------
 @client.tree.command(name = "gpt_text_to_emoji", description = "Converts text to emojis")
-@app_commands.rename(text = "text")
-@app_commands.describe(text = "Text to convert to emojis")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        if len(text) > 230:
-            await interaction.followup.send(
-                "GPT prompt is too long please try again (max prompt length is 230 characters)"
-            )
-            return
-        else:
-            gpt_prompt = text
-
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = f'Text to Emoji - "{text}"',
-            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", gpt_prompt, data["system_content"][0]["text_to_emoji"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-3.5-turbo-16k",
-            #     gpt_prompt,
-            #     data["system_content"][0]["text_to_emoji"] + char_limit,
-            #     0.7,
-            #     ),
-            
-            color = 0x002AFF,
+@app_commands.describe(text = "Text to convert to emojis (max 230 chars)")
+async def gpt_text_to_emoji(interaction: discord.Interaction, text: str): # Renamed function
+    if len(text) > 230:
+        await interaction.response.send_message(
+            "Input text is too long (max 230 characters).", ephemeral=True
         )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
+        return
 
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+    sys_prompt = data.get("system_content", [{}])[0].get("text_to_emoji", "Convert to emojis:")
+    await handle_api_command(interaction, f'Text to Emoji for "{text}"', gpt, "gpt-3.5-turbo-16k", text, sys_prompt, 0.7)
 
 
 # -------------------------- TEXT TO BLOCK LETTERS ----------------------------------
 @client.tree.command(
-    name="gpt_text_to_block_letters", description="Converts text into block letters"
+    name="gpt_text_to_block_letters", description="Converts text into block letter emojis"
 )
-@app_commands.rename(text = "text")
 @app_commands.describe(text = "Text to convert into block letters")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = "Text to block letter emojis",
-            description = await loop.run_in_executor(None, gpt, "gpt-3.5-turbo-16k", text, data["system_content"][0]["text_to_block_letters"] + char_limit, 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-3.5-turbo-16k",
-            #     text,
-            #     data["system_content"][0]["text_to_block_letters"] + char_limit,
-            #     0.7,
-            #     ),
-            
-            color=0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+async def gpt_text_to_block_letters(interaction: discord.Interaction, text: str): # Renamed function
+    sys_prompt = data.get("system_content", [{}])[0].get("text_to_block_letters", "Convert to block letters:")
+    await handle_api_command(interaction, "Text to Block Letters", gpt, "gpt-3.5-turbo-16k", text, sys_prompt, 0.7)
 
 
 # -------------------------- CODE DEBUG ----------------------------------
-@client.tree.command(name = "gpt_debug_code", description="Debugs your code")
-@app_commands.rename(text = "code")
-@app_commands.describe(text = "Code to debug")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = "Code Debug",
-            description = await loop.run_in_executor(None, gpt, "gpt-4", text, data["system_content"][0]["code_debug"] + char_limit, 0),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-4",
-            #     text,
-            #     data["system_content"][0]["code_debug"] + char_limit,
-            #     0,
-            #     ),
-            
-            color = 0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+@client.tree.command(name = "gpt_debug_code", description="Debugs your code using GPT-4")
+@app_commands.describe(code = "Code snippet to debug")
+async def gpt_debug_code(interaction: discord.Interaction, code: str): # Renamed function
+    sys_prompt_base = data.get("system_content", [{}])[0].get("code_debug", "Debug this code:")
+    sys_prompt = sys_prompt_base + char_limit
+    await handle_api_command(interaction, "Code Debug Analysis", gpt, "gpt-4", code, sys_prompt, 0)
 
 
 # -------------------------- SHORT STORY ----------------------------------
 @client.tree.command(
-    name = "gpt_short_story", description = "Writes a short story about a topic"
+    name = "gpt_short_story", description = "Writes a short story about a topic using GPT-4"
 )
-@app_commands.rename(text = "story_prompt")
-@app_commands.describe(text = "What do you want the story to be about?")
-async def send(interaction: discord.Interaction, text: str):  # noqa: F811
+@app_commands.describe(topic = "What should the story be about?")
+async def gpt_short_story(interaction: discord.Interaction, topic: str): # Renamed function
+    sys_prompt = data.get("system_content", [{}])[0].get("short_story", "Write a short story:")
+    await handle_api_command(interaction, f'Short Story about "{topic}"', gpt, "gpt-4", topic, sys_prompt, 0.7)
+
+
+# -------------------------- GENERAL QUESTION (GPT) ----------------------------------
+# Define choices for the model parameter
+ModelChoices = app_commands.Choice(name="GPT-3.5 (Faster, Cheaper)", value="gpt-3.5-turbo-16k")
+ModelChoices4 = app_commands.Choice(name="GPT-4 (Smarter, Slower)", value="gpt-4")
+
+@client.tree.command(name = "ask_gpt", description = "Ask a general question to GPT") # Renamed command
+@app_commands.describe(prompt = "What do you want to ask? (max 230 chars)")
+@app_commands.describe(model = "Choose the GPT model to use")
+@app_commands.choices(model=[ModelChoices, ModelChoices4]) # Use choices
+async def ask_gpt(interaction: discord.Interaction, prompt: str, model: app_commands.Choice[str]): # Renamed function, use Choice type hint
+    if len(prompt) > 230:
+        await interaction.response.send_message(
+            "Your question is too long (max 230 characters).", ephemeral=True
+        )
+        return
+
+    sys_prompt = data.get("system_content", [{}])[0].get("general_questions_gpt", "Answer the question:")
+    title = f'GPT ({model.name}) response to "{prompt}"' # Use choice name in title
+    await handle_api_command(interaction, title, gpt, model.value, prompt, sys_prompt, 0.7) # Use choice value for API call
+
+
+# -------------------------- GENERAL QUESTION (DEEPSEEK) ----------------------------------
+@client.tree.command(name = "ask_deepseek", description = "Ask a general question to Deepseek") # Renamed command
+@app_commands.describe(prompt = "What do you want to ask? (max 230 chars)")
+async def ask_deepseek(interaction: discord.Interaction, prompt: str): # Renamed function
+    if len(prompt) > 230:
+         await interaction.response.send_message(
+            "Your question is too long (max 230 characters).", ephemeral=True
+        )
+         return
+
+    sys_prompt = data.get("system_content", [{}])[0].get("general_questions_deepseek", "Answer the question:")
+    title = f'Deepseek response to "{prompt}"'
+    # Note: deepseek function in Chat_GPT_Function.txt needs prompt and sys_prompt args
+    await handle_api_command(interaction, title, deepseek, prompt, sys_prompt)
+
+
+# --- Helper Function for DALL-E Commands ---
+async def handle_dalle_command(interaction: discord.Interaction, api_func, prompt: str, **kwargs):
+    """Handles common logic for DALL-E commands."""
     try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
+        await interaction.response.defer(ephemeral=False, thinking=True)
 
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
+        # Get the current time + 1 hour for expiry display
+        future_time = datetime.now() + timedelta(hours=1)
+        expiry_timestamp = int(time.mktime(future_time.timetuple()))
+
+        # Run the blocking API call in an executor
+        loop = asyncio.get_event_loop()
+
+        # Create a partial function that packages api_func with its arguments
+        # The 'prompt' is passed as the first positional argument to api_func
+        # The items in 'kwargs' (like size, quality, style) are passed as keyword arguments to api_func
+        func_call = functools.partial(api_func, prompt, **kwargs)
+
+        # Now, run the 'func_call' (which takes no arguments itself) in the executor
+        image_url = await loop.run_in_executor(None, func_call)
+
+
+        if not image_url:
+             logger.warning(f"DALL-E call {api_func.__name__} returned empty URL for prompt: {prompt}")
+             await interaction.followup.send("The image generation failed or returned no URL.", ephemeral=True)
+             return
+
+        # Create embed for better presentation
         embed = discord.Embed(
-            title = "Short Story",
-            description = await loop.run_in_executor(None, gpt, "gpt-4", text, data["system_content"][0]["short_story"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     "gpt-4",
-            #     text,
-            #     data["system_content"][0]["short_story"],
-            #     0.7,
-            #     ),
-            
-            color = 0x002AFF,
+            title="Image Generation Result",
+            description=f"**Prompt:** {discord.utils.escape_markdown(prompt)}\n\n[Image Link]({image_url}) (Link expires <t:{expiry_timestamp}:R>)", # Escape prompt
+            color=discord.Color.purple() # Or another suitable color
         )
+        embed.set_image(url=image_url)
+        avatar_url = client.user.avatar.url if client.user.avatar else None
         embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
+            name=client.user.name,
+            icon_url=avatar_url,
         )
+        # Use __name__ which should be 'dalle3' or 'dalle2'
+        model_name = api_func.__name__.replace('dalle', 'DALL·E ').capitalize()
+        embed.set_footer(text=f"Generated with {model_name}") # Indicate model used
+        embed.timestamp = datetime.now()
 
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
+        await interaction.followup.send(embed=embed)
+
     except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
+        logger.exception(f"Error occurred in DALL-E command '{api_func.__name__}':")
+        error_message_user = "An error occurred while generating the image."
+        # Check for specific OpenAI content policy violation format
         if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+             try:
+                 details = str(e).split("message': '", 1)[1].split("',", 1)[0]
+                 error_message_user = f"Content Policy Violation: {details}"
+             except IndexError:
+                 error_message_user = "Your prompt was flagged due to content policy."
+        elif "Invalid size" in str(e): # Example for specific API errors
+             error_message_user = "An invalid image size was provided for the selected DALL-E model."
+        elif "Rate limit" in str(e): # Example for rate limits
+             error_message_user = "Rate limit reached. Please try again later."
+
+        try:
+            await interaction.followup.send(error_message_user, ephemeral=True)
+        except discord.NotFound:
+             logger.error("Interaction expired before DALL-E error message could be sent.")
+        except discord.HTTPException as http_err:
+             logger.error(f"Failed to send DALL-E error followup: {http_err}")
 
 
-# -------------------------- GENERAL QUESTION ----------------------------------
-@client.tree.command(name = "gpt_general_question", description = "For all your questions")
-@app_commands.rename(text = "prompt")
-@app_commands.describe(text = "What do you want to ask chatGPT?")
-@app_commands.describe(gpt_model = "Possible options = gpt-4 or gpt-3.5 (gpt-3.5-turbo-16k abbreviated)")
-async def send(interaction: discord.Interaction, text: str, gpt_model: str,):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        if len(text) > 230:
-            await interaction.followup.send(
-                "GPT prompt is too long please try again (max prompt length is 230 characters)"
-            )
-            return
-        else:
-            gpt_prompt = text
-            
-        if gpt_model.lower() not in ("gpt-4", "gpt-3.5"):
-            await interaction.followup.send(
-                "Invalid GPT model. Must be either gpt-4 or gpt-3.5."
-            )
-            return
-        else:
-            if gpt_model.lower() == "gpt-3.5":
-                gpt_model = "gpt-3.5-turbo-16k"
-            else:
-                gpt_model = gpt_model.lower()
-                
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = f'General Question - "{text}"',
-            description = await loop.run_in_executor(None, gpt, gpt_model, gpt_prompt, data["system_content"][0]["general_questions_gpt"], 0.7),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     gpt_model,
-            #     gpt_prompt,
-            #     data["system_content"][0]["general_questions"],
-            #     0.7,
-            #     ),
-            
-            color = 0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
-            
-
-# -------------------------- DEEPSEEK GENERAL QUESTION ----------------------------------
-@client.tree.command(name = "deepseek", description = "For all your questions")
-@app_commands.rename(text = "prompt")
-@app_commands.describe(text = "What do you want to ask deepseek?")
-async def send(interaction: discord.Interaction, text: str,):  # noqa: F811
-    try:
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-
-        if len(text) > 230:
-            await interaction.followup.send(
-                "Prompt is too long please try again (max prompt length is 230 characters)"
-            )
-            return
-        else:
-            deepseek_prompt = text
-                
-        # It is best to use discord embeds for gpt commands as discord embed descriptions allow for 4096 characters instead of 2000 characters for normal messages
-        embed = discord.Embed(
-            title = f'General Question - "{text}"',
-            description = await loop.run_in_executor(None, deepseek, deepseek_prompt, data["system_content"][0]["general_questions_deepseek"]),  # Prevents heartbeat block warning and bot disconnecting from discord error
-            
-            # gpt(
-            #     gpt_model,
-            #     gpt_prompt,
-            #     data["system_content"][0]["general_questions"],
-            #     0.7,
-            #     ),
-            
-            color = 0x002AFF,
-        )
-        embed.set_author(
-            name = "GPT Bot",
-            url = "https://www.alby08.com",
-            icon_url = client.user.avatar.url,
-        )
-
-        # Send as followup message
-        await interaction.followup.send(embed = embed)
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
-
-       
 # -------------------------- DALLE 3 ----------------------------------
-@client.tree.command(name = "dalle_3", description="Generates an image with DALL·E 3")
-@app_commands.describe(prompt = "Describe the image you want DALL·E 3 to create")
-@app_commands.describe(img_dimensions = "Must be either 1024x1024, 1792x1024, or 1024x1792 for dall-e-3")
-@app_commands.describe(img_quality = "Must be either hd or standard. HD = images with finer details and greater consistency across the image.")
-@app_commands.describe(img_style = "Must be either vivid or natural. Vivid = hyper-real and dramatic images. Natural = more natural, less hyper-real looking images.")
-async def send(interaction: discord.Interaction, prompt: str, img_dimensions: str, img_quality: str, img_style: str):  # noqa: F811
-    try:
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-        
-        # Get the current time
-        current_time = datetime.now()
-        
-        # Add 1 hour to the current time
-        future_time = current_time + timedelta(hours=1)
-        
-        if img_dimensions.lower() not in ("1024x1024", "1792x1024", "1024x1792"):
-            await interaction.followup.send(
-                "Invalid image dimension. Must be either 1024x1024, 1792x1024, or 1024x1792."
-            )
-            return
-        else:
-            img_dimensions = img_dimensions.lower()
-            
-        if img_quality.lower() not in ("hd", "standard"):
-            await interaction.followup.send(
-                "Invalid image quality. Must be either hd or standard."
-            )
-            return
-        else:
-            img_quality = img_quality.lower()
-            
-        if img_style.lower() not in ("vivid", "natural"):
-            await interaction.followup.send(
-                "Invalid image style. Must be either vivid or natural."
-            )
-            return
-        else:
-            img_style = img_style.lower()
-            
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        image_url = await loop.run_in_executor(None, dalle3, prompt, img_quality, img_dimensions, img_style)  # Prevents heartbeat block warning and bot disconnecting from discord error
+# Define choices for DALL-E 3 parameters
+Dalle3Size = app_commands.Choice
+Dalle3Quality = app_commands.Choice
+Dalle3Style = app_commands.Choice
 
-        # Send as followup message
-        await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")
-        
-    except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
-        
+@client.tree.command(name = "dalle_3", description="Generates an image with DALL-E 3")
+@app_commands.describe(prompt = "Describe the image you want DALL-E 3 to create")
+@app_commands.describe(size = "Image dimensions")
+@app_commands.choices(size=[
+    Dalle3Size(name="Square (1024x1024)", value="1024x1024"),
+    Dalle3Size(name="Wide (1792x1024)", value="1792x1024"),
+    Dalle3Size(name="Tall (1024x1792)", value="1024x1792")
+])
+@app_commands.describe(quality = "Image quality")
+@app_commands.choices(quality=[
+    Dalle3Quality(name="Standard", value="standard"),
+    Dalle3Quality(name="HD (Finer Details)", value="hd")
+])
+@app_commands.describe(style = "Image style")
+@app_commands.choices(style=[
+    Dalle3Style(name="Vivid (Hyper-real)", value="vivid"),
+    Dalle3Style(name="Natural (Less hyper-real)", value="natural")
+])
+async def dalle_3_command(interaction: discord.Interaction, prompt: str, size: app_commands.Choice[str], quality: app_commands.Choice[str], style: app_commands.Choice[str]): # Renamed function
+    # Pass validated choices directly using .value
+    await handle_dalle_command(interaction, dalle3, prompt, size=size.value, quality=quality.value, style=style.value)
+
+
 # -------------------------- DALLE 2 ----------------------------------
-@client.tree.command(name = "dalle_2", description = "Generates an image with DALL·E 2")
-@app_commands.describe(prompt = "Describe the image you want DALL·E 2 to create")
-@app_commands.describe(img_dimensions = "Must be either 256x256, 512x512, or 1024x1024 for dall-e-2")
-async def send(interaction: discord.Interaction, prompt: str, img_dimensions: str):  # noqa: F811
+Dalle2Size = app_commands.Choice
+
+@client.tree.command(name = "dalle_2", description = "Generates an image with DALL-E 2")
+@app_commands.describe(prompt = "Describe the image you want DALL-E 2 to create")
+@app_commands.describe(size = "Image dimensions")
+@app_commands.choices(size=[
+    Dalle2Size(name="Small Square (256x256)", value="256x256"),
+    Dalle2Size(name="Medium Square (512x512)", value="512x512"),
+    Dalle2Size(name="Large Square (1024x1024)", value="1024x1024")
+])
+async def dalle_2_command(interaction: discord.Interaction, prompt: str, size: app_commands.Choice[str]): # Renamed function
+    # Pass validated choice directly using .value
+    await handle_dalle_command(interaction, dalle2, prompt, size=size.value)
+
+
+# --- Main Execution ---
+if __name__ == "__main__":
+    if not token:
+        # This check is redundant if the earlier exit works, but serves as a final safeguard
+        logger.critical("Bot token is not configured. Cannot start.")
+        sys.exit("Critical Error: Bot token missing.")
+
     try:
-        await interaction.response.defer(
-            ephemeral = False
-        )  # Defer the response to prevent command timeout
-        
-        # Get the current time
-        current_time = datetime.now()
-        
-        # Add 1 hour to the current time
-        future_time = current_time + timedelta(hours=1)
-        
-        if img_dimensions.lower() not in ("256x256", "512x512", "1024x1024"):
-            await interaction.followup.send(
-                "Invalid image dimension. Must be either 256x256, 512x512, or 1024x1024."
-            )
-            return
-        else:
-            img_dimensions = img_dimensions.lower()
-            
-        loop = asyncio.get_event_loop()  # Prevents heartbeat block warning and bot disconnecting from discord error
-        image_url = await loop.run_in_executor(None, dalle2, prompt, img_dimensions)  # Prevents heartbeat block warning and bot disconnecting from discord error
-
-        # Send as followup message
-        await interaction.followup.send(f"[Image Link]({image_url}) - Image link expires in <t:{int(time.mktime(future_time.timetuple()))}:R>")  # Convert future_time to unix timestamp.
-        
+        logger.info("Attempting to start the bot...")
+        # Pass the logger instance to client.run if supported by your discord.py version, otherwise use None
+        # Check discord.py documentation for the exact signature of client.run regarding logging
+        client.run(token, log_handler=None) # Disable default discord.py logging handler if using custom
+    except discord.LoginFailure:
+        logger.critical("Login Failed: Improper token provided. Check BOT_TOKEN.")
+        sys.exit("Critical Error: Invalid bot token.")
+    except discord.PrivilegedIntentsRequired as e:
+         logger.critical(f"Privileged Intents ({e.shard_id}) are required but not enabled in the Developer Portal.")
+         sys.exit("Critical Error: Privileged Intents not enabled.")
     except Exception as e:
-        # Handle exceptions
-        print(f"An error occurred: {str(e)}")
-        
-        # Check if the error is a content policy violation
-        if "content_policy_violation" in str(e):
-            error_message = str(e).split("message': '")[1].split("',")[0]
-            await interaction.followup.send(f"An error occurred: {error_message}")
-        else:
-            await interaction.followup.send("An error occurred while processing the command.")
+        logger.exception("An unexpected error occurred during bot execution:")
+        sys.exit("Critical Error: Bot failed to run.")
 
-
-client.run(token)
